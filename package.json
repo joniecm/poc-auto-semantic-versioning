@@ -1,0 +1,13 @@
+{
+  "name": "poc-auto-semantic-versioning",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simple multi-branch app for testing dynamic versioning",
+  "scripts": {
+    "start": "node src/index.js",
+    "version:dynamic": "node scripts/dynamic-version.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
