@@ -1,48 +1,66 @@
 # POC: Auto Semantic Versioning Playground
 
-This repository is a tiny app prepared for testing dynamic versioning across multiple Git branches.
+This repository is a tiny app prepared for testing CI-driven version resolution and container publishing to GitHub Container Registry (GHCR).
 
 ## What is included
 
 - Minimal Node.js app (`src/index.js`)
-- Dynamic version resolver (`scripts/dynamic-version.js`)
-- Branches commonly used in release workflows (`main`, `develop`, `feature/*`, `release/*`, `hotfix/*`)
+- GitHub Actions workflow for auto versioning + container build/push
+- Branch conventions for version formats (`main`, `release/*`)
 
-## Dynamic version rules
+## Versioning policy (resolved in CI)
 
-The script uses the latest Git tag (`vX.Y.Z`) as the base and derives output by branch type:
+Version precedence:
 
-- `main` -> `X.Y.Z`
-- `develop` -> `X.Y.(Z+1)-alpha.<commitCount>`
-- `release/x.y.z` -> `x.y.z-rc.<commitCount>`
-- `feature/*` -> `X.(Y+1).0-feature-...<commitCount>+<sha>`
-- `hotfix/*` -> `X.Y.(Z+1)-hotfix.<commitCount>`
+1. If a Git tag build is triggered (`v*`), use the exact tag as the image version.
+2. Otherwise resolve by branch rule:
+   - `main` -> `v<latest-stable>-<shortSha>` (example: `v0.1.0-a1b2c3d`)
+   - `release/x.y.z` -> `vx.y.z-rcN` (example: `v0.1.0-rc1`)
 
-## Quick start
+Notes:
 
-1. Install dependencies (none required for runtime, Node.js 18+ is enough).
-2. Run:
+- `N` for `rc` is the number of commits ahead of `main` for that branch.
+- `release/*` branches must use a valid semantic version in the branch name.
+
+## Release tag automation
+
+When you push commits to a `release/*` branch, an automated job will:
+
+1. Extract the version from the branch name (for example, `release/0.1.0` → `v0.1.0`).
+2. Create a Git tag with that version.
+3. Push the tag to the repository.
+
+This triggers the container build job with the exact tag version, so `v0.1.0` becomes the image tag.
+If the tag already exists, the job skips tag creation gracefully.
+
+## CI pipeline
+
+The workflow:
+
+1. Computes the version based on the event type and branch/tag.
+2. Builds a container image.
+3. Pushes the image to `ghcr.io/<owner>/poc-auto-semantic-versioning:<version>`.
+
+Required GitHub permissions:
+
+- `contents: read`
+- `packages: write`
+
+## Quick test flows
+
+Release candidate branch:
 
 ```bash
-npm run version:dynamic
+git checkout main
+git checkout -b release/0.1.0
+# first commit on branch -> image tagged v0.1.0-rc1
+# automated job creates and pushes tag v0.1.0
 ```
 
-## Suggested branch workflow for tests
+Manual tag build:
 
 ```bash
-git checkout main
-git tag v0.1.0
-git checkout develop
-# add commits, check alpha versions
-
-git checkout -b feature/login-flow
-# add commits, check feature prerelease
-
-git checkout develop
-git checkout -b release/0.2.0
-# add commits, check rc versions
-
-git checkout main
-git checkout -b hotfix/fix-crash
-# add commits, check hotfix prerelease
+git tag v0.1.1
+git push origin v0.1.1
+# build version is exactly v0.1.1
 ```

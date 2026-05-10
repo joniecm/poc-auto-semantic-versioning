@@ -1,0 +1,118 @@
+name: Build and Push Container
+
+on:
+  push:
+    branches:
+      - main
+      - release/**
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REF_TYPE="${GITHUB_REF_TYPE}"
+          REF_NAME="${GITHUB_REF_NAME}"
+
+          if [[ "${REF_TYPE}" == "tag" ]]; then
+            VERSION="${REF_NAME}"
+          elif [[ "${REF_NAME}" == "main" ]]; then
+            LATEST_STABLE_TAG="$(git for-each-ref --sort=-v:refname --format='%(refname:strip=2)' refs/tags | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+            if [[ -z "${LATEST_STABLE_TAG}" ]]; then
+              LATEST_STABLE_TAG="v0.1.0"
+            fi
+            SHORT_SHA="$(git rev-parse --short HEAD)"
+            VERSION="${LATEST_STABLE_TAG}-${SHORT_SHA}"
+          elif [[ "${REF_NAME}" =~ ^release/([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            BASE_VERSION="${BASH_REMATCH[1]}"
+            git fetch origin main --depth=1
+            COUNT="$(git rev-list --count origin/main..HEAD)"
+            if [[ "${COUNT}" == "0" ]]; then
+              COUNT="1"
+            fi
+            VERSION="v${BASE_VERSION}-rc${COUNT}"
+          else
+            echo "Unsupported branch for this workflow: ${REF_NAME}"
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved version: ${VERSION}"
+
+      - name: Compute image name
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNER_LOWER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          REPO_LOWER="$(echo "${REPO_NAME}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER_LOWER}/${REPO_LOWER}"
+          echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved image: ${IMAGE}"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.image }}:${{ steps.version.outputs.version }}
+
+  create-release-tag:
+    if: startsWith(github.ref, 'refs/heads/release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from branch
+        id: release_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          if [[ "${BRANCH_NAME}" =~ ^release/([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            VERSION="v${BASH_REMATCH[1]}"
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "Extracted version from branch: ${VERSION}"
+          else
+            echo "Invalid release branch name: ${BRANCH_NAME}"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release_version.outputs.version }}"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag "${TAG}" || { echo "Tag ${TAG} already exists"; exit 0; }
+          git push origin "${TAG}"
