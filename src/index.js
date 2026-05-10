@@ -3,3 +3,7 @@ function main() {
 }
 
 main();
+
+function loginFeatureFlag() {
+  return true;
+}
