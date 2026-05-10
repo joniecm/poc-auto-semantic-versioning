@@ -40,6 +40,7 @@ The workflow:
 1. Computes the version based on the event type and branch/tag.
 2. Builds a container image.
 3. Pushes the image to `ghcr.io/<owner>/poc-auto-semantic-versioning:<version>`.
+4. On `main` branch builds, also pushes a moving alias tag: `ghcr.io/<owner>/poc-auto-semantic-versioning:main`.
 
 Required GitHub permissions:
 

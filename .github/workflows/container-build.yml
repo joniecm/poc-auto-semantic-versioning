@@ -74,12 +74,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute push tags
+        id: push_tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.image.outputs.image }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          TAGS="${IMAGE}:${VERSION}"
+          if [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "main" ]]; then
+            TAGS="${TAGS}"$'\n'"${IMAGE}:main"
+          fi
+
+          {
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.image.outputs.image }}:${{ steps.version.outputs.version }}
+          tags: ${{ steps.push_tags.outputs.tags }}
 
   create-release-tag:
     if: startsWith(github.ref, 'refs/heads/release/')
