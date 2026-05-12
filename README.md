@@ -14,7 +14,7 @@ Version precedence:
 
 1. If a Git tag build is triggered (`v*`), use the exact tag as the image version.
 2. Otherwise resolve by branch rule:
-   - `main` -> `v<latest-stable>-<shortSha>` (example: `v0.1.0-a1b2c3d`)
+   - `main` -> `main.<yyyymmdd>.<runNumber>` (example: `main.20260512.3`)
    - `release/x.y.z` -> `vx.y.z-rcN` (example: `v0.1.0-rc1`)
 
 Notes:

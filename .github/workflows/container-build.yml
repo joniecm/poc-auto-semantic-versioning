@@ -33,12 +33,8 @@ jobs:
           if [[ "${REF_TYPE}" == "tag" ]]; then
             VERSION="${REF_NAME}"
           elif [[ "${REF_NAME}" == "main" ]]; then
-            LATEST_STABLE_TAG="$(git for-each-ref --sort=-v:refname --format='%(refname:strip=2)' refs/tags | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
-            if [[ -z "${LATEST_STABLE_TAG}" ]]; then
-              LATEST_STABLE_TAG="v0.1.0"
-            fi
-            SHORT_SHA="$(git rev-parse --short HEAD)"
-            VERSION="${LATEST_STABLE_TAG}-${SHORT_SHA}"
+            DATE_STAMP="$(date -u +%Y%m%d)"
+            VERSION="main.${DATE_STAMP}.${GITHUB_RUN_NUMBER}"
           elif [[ "${REF_NAME}" =~ ^release/([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             BASE_VERSION="${BASH_REMATCH[1]}"
             git fetch origin main --depth=1
