@@ -7,13 +7,51 @@ on:
       - release/**
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
 jobs:
+  guard-release-version-not-tagged:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail if release version tag already exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF_TYPE}" != "branch" ]]; then
+            echo "Not a branch push; guard check skipped."
+            exit 0
+          fi
+
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^release/([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Not a release/x.y.z branch; guard check skipped."
+            exit 0
+          fi
+
+          VERSION="v${BASH_REMATCH[1]}"
+          echo "Checking whether final tag ${VERSION} already exists..."
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "Release version ${VERSION} is already tagged and published."
+            echo "Pushes to ${GITHUB_REF_NAME} are blocked to prevent overwriting a published release version."
+            exit 1
+          fi
+
+          echo "No published final tag found for ${VERSION}; pipeline can continue."
+
   build-and-push:
+    needs: guard-release-version-not-tagged
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -97,17 +135,18 @@ jobs:
           tags: ${{ steps.push_tags.outputs.tags }}
 
   create-release-tag:
-    if: startsWith(github.ref, 'refs/heads/release/')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Extract version from branch
+      - name: Extract version from release branch
         id: release_version
         shell: bash
         run: |
@@ -118,7 +157,7 @@ jobs:
             echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
             echo "Extracted version from branch: ${VERSION}"
           else
-            echo "Invalid release branch name: ${BRANCH_NAME}"
+            echo "Manual tag creation must be run from a release/x.y.z branch. Current ref: ${GITHUB_REF}"
             exit 1
           fi
 
@@ -131,3 +170,29 @@ jobs:
           git config user.email "actions@github.com"
           git tag "${TAG}" || { echo "Tag ${TAG} already exists"; exit 0; }
           git push origin "${TAG}"
+
+      - name: Compute image name
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNER_LOWER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          REPO_LOWER="$(echo "${REPO_NAME}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER_LOWER}/${REPO_LOWER}"
+          echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved image: ${IMAGE}"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image for release tag
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.image }}:${{ steps.release_version.outputs.version }}
