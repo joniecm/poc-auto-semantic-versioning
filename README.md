@@ -5,7 +5,7 @@ This repository is a tiny app prepared for testing CI-driven version resolution 
 ## What is included
 
 - Minimal Node.js app (`src/index.js`)
-- GitHub Actions workflow for auto versioning + container build/push
+- GitHub Actions workflows for push CI and manual release publish
 - Branch conventions for version formats (`main`, `release/*`)
 
 ## Versioning policy (resolved in CI)
@@ -27,7 +27,7 @@ Notes:
 Tags for final releases are created by a manual GitHub Actions job.
 
 1. Create or update your `release/x.y.z` branch.
-2. Open **Actions** and run this workflow manually on that release branch.
+2. Open **Actions** and run workflow **Publish Release Tag and Image** manually on that release branch.
 3. The `create-release-tag` job extracts `x.y.z` from the branch and automatically creates/pushes `vx.y.z`.
 4. In the same manual run, the job builds and pushes container image `ghcr.io/<owner>/poc-auto-semantic-versioning:vx.y.z`.
 
@@ -51,7 +51,7 @@ The workflow:
 3. Builds a container image.
 4. Pushes the image to `ghcr.io/<owner>/poc-auto-semantic-versioning:<version>`.
 5. On `main` branch builds, also pushes a moving alias tag: `ghcr.io/<owner>/poc-auto-semantic-versioning:main`.
-6. On manual workflow runs from `release/x.y.z`, creates/pushes `vx.y.z` and publishes the same versioned image.
+6. Separate manual workflow **Publish Release Tag and Image** runs from `release/x.y.z`, creates/pushes `vx.y.z`, and publishes the same versioned image.
 
 Required GitHub permissions:
 
@@ -74,7 +74,7 @@ git checkout -b release/0.1.0
 Manual release publish:
 
 ```bash
-# run the workflow manually on release/0.1.1 branch
+# run workflow "Publish Release Tag and Image" manually on release/0.1.1 branch
 # create-release-tag creates and pushes v0.1.1
 # create-release-tag publishes ghcr.io/<owner>/poc-auto-semantic-versioning:v0.1.1
 ```

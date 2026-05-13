@@ -7,7 +7,6 @@ on:
       - release/**
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -51,7 +50,6 @@ jobs:
 
   build-and-push:
     needs: guard-release-version-not-tagged
-    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -133,66 +131,3 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.push_tags.outputs.tags }}
-
-  create-release-tag:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Extract version from release branch
-        id: release_version
-        shell: bash
-        run: |
-          set -euo pipefail
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          if [[ "${BRANCH_NAME}" =~ ^release/([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-            VERSION="v${BASH_REMATCH[1]}"
-            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-            echo "Extracted version from branch: ${VERSION}"
-          else
-            echo "Manual tag creation must be run from a release/x.y.z branch. Current ref: ${GITHUB_REF}"
-            exit 1
-          fi
-
-      - name: Create and push tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ steps.release_version.outputs.version }}"
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag "${TAG}" || { echo "Tag ${TAG} already exists"; exit 0; }
-          git push origin "${TAG}"
-
-      - name: Compute image name
-        id: image
-        shell: bash
-        run: |
-          set -euo pipefail
-          OWNER_LOWER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          REPO_LOWER="$(echo "${REPO_NAME}" | tr '[:upper:]' '[:lower:]')"
-          IMAGE="ghcr.io/${OWNER_LOWER}/${REPO_LOWER}"
-          echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
-          echo "Resolved image: ${IMAGE}"
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push image for release tag
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.image.outputs.image }}:${{ steps.release_version.outputs.version }}
