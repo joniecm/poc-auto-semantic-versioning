@@ -29,17 +29,29 @@ Tags for final releases are created by a manual GitHub Actions job.
 1. Create or update your `release/x.y.z` branch.
 2. Open **Actions** and run this workflow manually on that release branch.
 3. The `create-release-tag` job extracts `x.y.z` from the branch and automatically creates/pushes `vx.y.z`.
+4. In the same manual run, the job builds and pushes container image `ghcr.io/<owner>/poc-auto-semantic-versioning:vx.y.z`.
 
-Pushing the tag triggers the container build job with the exact tag version, so `vx.y.z` becomes the image tag.
+This guarantees the final release tag and release image are published together.
+
+## Release branch protection
+
+Pushes to `release/x.y.z` are guarded by a control job:
+
+1. The pipeline checks whether final tag `vx.y.z` already exists in the remote repository.
+2. If that tag exists, the workflow fails immediately and build/push is stopped.
+
+This prevents any further release branch pipeline runs from publishing artifacts for a version that has already been finalized.
 
 ## CI pipeline
 
 The workflow:
 
-1. Computes the version based on the event type and branch/tag.
-2. Builds a container image.
-3. Pushes the image to `ghcr.io/<owner>/poc-auto-semantic-versioning:<version>`.
-4. On `main` branch builds, also pushes a moving alias tag: `ghcr.io/<owner>/poc-auto-semantic-versioning:main`.
+1. On push events, validates release branches are not already finalized by an existing `vx.y.z` tag.
+2. Computes the version based on the event type and branch/tag.
+3. Builds a container image.
+4. Pushes the image to `ghcr.io/<owner>/poc-auto-semantic-versioning:<version>`.
+5. On `main` branch builds, also pushes a moving alias tag: `ghcr.io/<owner>/poc-auto-semantic-versioning:main`.
+6. On manual workflow runs from `release/x.y.z`, creates/pushes `vx.y.z` and publishes the same versioned image.
 
 Required GitHub permissions:
 
@@ -55,12 +67,14 @@ git checkout main
 git checkout -b release/0.1.0
 # first commit on branch -> image tagged v0.1.0-rc1
 # when ready, manually run the workflow on release/0.1.0
-# create-release-tag job pushes v0.1.0
+# create-release-tag job pushes v0.1.0 and image ghcr.io/<owner>/poc-auto-semantic-versioning:v0.1.0
+# any later push to release/0.1.0 is blocked by guard because v0.1.0 already exists
 ```
 
-Manual tag build:
+Manual release publish:
 
 ```bash
 # run the workflow manually on release/0.1.1 branch
 # create-release-tag creates and pushes v0.1.1
+# create-release-tag publishes ghcr.io/<owner>/poc-auto-semantic-versioning:v0.1.1
 ```
