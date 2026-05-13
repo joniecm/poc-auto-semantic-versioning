@@ -22,16 +22,15 @@ Notes:
 - `N` for `rc` is the number of commits ahead of `main` for that branch.
 - `release/*` branches must use a valid semantic version in the branch name.
 
-## Release tag automation
+## Release tag creation
 
-When you push commits to a `release/*` branch, an automated job will:
+Tags for final releases are created by a manual GitHub Actions job.
 
-1. Extract the version from the branch name (for example, `release/0.1.0` → `v0.1.0`).
-2. Create a Git tag with that version.
-3. Push the tag to the repository.
+1. Create or update your `release/x.y.z` branch.
+2. Open **Actions** and run this workflow manually on that release branch.
+3. The `create-release-tag` job extracts `x.y.z` from the branch and automatically creates/pushes `vx.y.z`.
 
-This triggers the container build job with the exact tag version, so `v0.1.0` becomes the image tag.
-If the tag already exists, the job skips tag creation gracefully.
+Pushing the tag triggers the container build job with the exact tag version, so `vx.y.z` becomes the image tag.
 
 ## CI pipeline
 
@@ -55,13 +54,13 @@ Release candidate branch:
 git checkout main
 git checkout -b release/0.1.0
 # first commit on branch -> image tagged v0.1.0-rc1
-# automated job creates and pushes tag v0.1.0
+# when ready, manually run the workflow on release/0.1.0
+# create-release-tag job pushes v0.1.0
 ```
 
 Manual tag build:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
-# build version is exactly v0.1.1
+# run the workflow manually on release/0.1.1 branch
+# create-release-tag creates and pushes v0.1.1
 ```

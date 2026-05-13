@@ -7,6 +7,7 @@ on:
       - release/**
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   build-and-push:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -97,7 +99,7 @@ jobs:
           tags: ${{ steps.push_tags.outputs.tags }}
 
   create-release-tag:
-    if: startsWith(github.ref, 'refs/heads/release/')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -107,7 +109,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract version from branch
+      - name: Extract version from release branch
         id: release_version
         shell: bash
         run: |
@@ -118,7 +120,7 @@ jobs:
             echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
             echo "Extracted version from branch: ${VERSION}"
           else
-            echo "Invalid release branch name: ${BRANCH_NAME}"
+            echo "Manual tag creation must be run from a release/x.y.z branch. Current ref: ${GITHUB_REF}"
             exit 1
           fi
 
